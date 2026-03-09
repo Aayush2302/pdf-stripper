@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PDF Stripper — Beamer/LaTeX Slide Cleaner</title>
+
+<link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
+<script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&family=Bebas+Neue&family=IBM+Plex+Sans:wght@300;400;600&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --bg:#0a0a0a; --surface:#111; --border:#1e1e1e; --border2:#2a2a2a;
+    --accent:#d4f000; --red:#ff3d3d; --green:#00e676; --blue:#5ee8ff;
+    --text:#efefef; --muted:#555; --muted2:#888; --card:#131313;
+  }
+  *{margin:0;padding:0;box-sizing:border-box} html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-serif;min-height:100vh;overflow-x:hidden}
+  body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.055) 2px,rgba(0,0,0,0.055) 4px);pointer-events:none;z-index:9999}
+  body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(212,240,0,0.022) 1px,transparent 1px),linear-gradient(90deg,rgba(212,240,0,0.022) 1px,transparent 1px);background-size:48px 48px;pointer-events:none;z-index:0}
+
+  .wrap{position:relative;z-index:1;max-width:1000px;margin:0 auto;padding:0 24px 80px}
+
+  /* BOOT */
+  #boot{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:10000;gap:18px;transition:opacity 0.5s ease}
+  #boot.gone{opacity:0;pointer-events:none}
+  .boot-spin{width:36px;height:36px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin 0.75s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .boot-logo{font-family:'Bebas Neue',sans-serif;font-size:3.2rem;letter-spacing:0.05em}
+  .boot-logo em{color:var(--accent);font-style:normal}
+  .boot-msg{font-family:'IBM Plex Mono',monospace;font-size:0.67rem;color:var(--muted2);letter-spacing:0.1em;text-transform:uppercase}
+  .boot-sub{font-family:'IBM Plex Mono',monospace;font-size:0.58rem;color:var(--muted);letter-spacing:0.08em}
+
+  /* HEADER */
+  header{padding:52px 0 36px;display:flex;align-items:flex-end;justify-content:space-between;gap:20px;border-bottom:1px solid var(--border2);margin-bottom:40px}
+  .logo{font-family:'Bebas Neue',sans-serif;font-size:clamp(3.8rem,9vw,6.5rem);letter-spacing:0.04em;line-height:0.88}
+  .logo em{color:var(--accent);font-style:normal}
+  .hdr-r{text-align:right;font-family:'IBM Plex Mono',monospace;font-size:0.63rem;color:var(--muted);line-height:1.9;letter-spacing:0.1em;text-transform:uppercase}
+  .hdr-r b{color:var(--accent);font-size:0.75rem;display:block;margin-bottom:4px}
+
+  /* HOW */
+  .how{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border2);border:1px solid var(--border2);border-radius:4px;overflow:hidden;margin-bottom:36px}
+  .how-c{background:var(--surface);padding:22px 20px;transition:background 0.2s}
+  .how-c:hover{background:#161600}
+  .how-n{font-family:'Bebas Neue',sans-serif;font-size:2.8rem;color:var(--accent);line-height:1;margin-bottom:8px;opacity:0.65}
+  .how-t{font-size:0.82rem;font-weight:600;margin-bottom:5px}
+  .how-d{font-family:'IBM Plex Mono',monospace;font-size:0.62rem;color:var(--muted2);line-height:1.7}
+
+  /* DROP */
+  #dz{border:2px dashed var(--border2);border-radius:4px;background:var(--surface);padding:60px 32px;text-align:center;cursor:pointer;transition:all 0.2s;position:relative;overflow:hidden}
+  #dz::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 50% 0%,rgba(212,240,0,0.055) 0%,transparent 65%);pointer-events:none}
+  #dz:hover,#dz.over{border-color:var(--accent);background:#0d0e00}
+  #dz.over{transform:scale(1.007)}
+  .dz-icon{font-size:3.6rem;display:block;margin-bottom:16px;opacity:0.45;transition:opacity 0.2s}
+  #dz:hover .dz-icon{opacity:0.85}
+  .dz-t{font-family:'Bebas Neue',sans-serif;font-size:2rem;letter-spacing:0.06em;margin-bottom:8px}
+  .dz-s{font-family:'IBM Plex Mono',monospace;font-size:0.68rem;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase}
+  #fi{display:none}
+
+  /* CHIP */
+  .chip{display:none;align-items:center;gap:14px;margin-top:14px;padding:14px 18px;background:var(--card);border:1px solid var(--border2);border-radius:4px;animation:fadeUp .25s ease}
+  .chip.on{display:flex}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+  .c-ico{font-size:1.6rem;flex-shrink:0}
+  .c-body{flex:1;min-width:0}
+  .c-name{font-weight:600;font-size:.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .c-meta{font-family:'IBM Plex Mono',monospace;font-size:.63rem;color:var(--muted2);margin-top:2px}
+  .c-x{background:none;border:1px solid var(--border2);color:var(--muted2);padding:5px 11px;border-radius:3px;font-family:'IBM Plex Mono',monospace;font-size:.63rem;cursor:pointer;transition:all .15s;flex-shrink:0}
+  .c-x:hover{border-color:var(--red);color:var(--red)}
+
+  /* ERR */
+  .err{display:none;margin-top:14px;padding:14px 18px;background:rgba(255,61,61,.07);border:1px solid rgba(255,61,61,.25);border-radius:4px;font-family:'IBM Plex Mono',monospace;font-size:.7rem;color:var(--red);line-height:1.6}
+  .err.on{display:block}
+
+  /* STRIP BTN */
+  #btnS{display:none;width:100%;margin-top:18px;padding:20px;background:var(--accent);color:#000;border:none;border-radius:3px;font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:.1em;cursor:pointer;transition:all .15s}
+  #btnS:hover{filter:brightness(1.1)} #btnS:active{transform:scale(.998)}
+  #btnS.on{display:block} #btnS:disabled{opacity:.45;cursor:not-allowed;filter:none}
+
+  /* LOADING */
+  #ld{display:none;margin-top:22px;padding:26px 22px;background:var(--card);border:1px solid var(--border2);border-radius:4px}
+  #ld.on{display:block}
+  .lhd{display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:.68rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted2);margin-bottom:12px}
+  .lhd span{color:var(--accent)}
+  .ltrack{height:3px;background:var(--border2);border-radius:3px;overflow:hidden}
+  .lfill{height:100%;background:var(--accent);width:0%;transition:width .45s ease}
+  .lsteps{margin-top:18px;display:flex;flex-direction:column;gap:9px}
+  .lstep{display:flex;align-items:center;gap:10px;font-family:'IBM Plex Mono',monospace;font-size:.65rem;color:var(--muted);transition:color .2s}
+  .lstep.active{color:var(--accent)} .lstep.done{color:var(--green)}
+  .ldot{width:7px;height:7px;border-radius:50%;border:1px solid var(--border2);flex-shrink:0;transition:all .2s}
+  .lstep.active .ldot{background:var(--accent);border-color:var(--accent);box-shadow:0 0 7px var(--accent)}
+  .lstep.done .ldot{background:var(--green);border-color:var(--green)}
+
+  /* RESULTS */
+  #res{display:none;margin-top:32px;animation:fadeUp .35s ease}
+  #res.on{display:block}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border2);border:1px solid var(--border2);border-radius:4px;overflow:hidden;margin-bottom:20px}
+  .sc{background:var(--card);padding:22px 16px;text-align:center}
+  .sn{font-family:'Bebas Neue',sans-serif;font-size:3rem;line-height:1;margin-bottom:4px}
+  .sn.y{color:var(--accent)}.sn.g{color:var(--green)}.sn.r{color:var(--red)}.sn.b{color:var(--blue)}
+  .sl{font-family:'IBM Plex Mono',monospace;font-size:.58rem;text-transform:uppercase;letter-spacing:.12em;color:var(--muted2)}
+  .rb-wrap{padding:16px 20px;background:var(--card);border:1px solid var(--border2);border-radius:4px;margin-bottom:20px}
+  .rb-hd{font-family:'IBM Plex Mono',monospace;font-size:.63rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted2);margin-bottom:10px;display:flex;justify-content:space-between}
+  .rb-hd strong{color:var(--green);font-size:.78rem}
+  .rb-track{height:10px;background:rgba(255,61,61,.18);border-radius:5px;overflow:hidden}
+  .rb-fill{height:100%;background:var(--green);border-radius:5px;transition:width 1.2s cubic-bezier(.16,1,.3,1)}
+  .btn-dl{display:block;width:100%;margin-bottom:20px;padding:20px;background:transparent;color:var(--accent);border:2px solid var(--accent);border-radius:3px;font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:.1em;text-align:center;text-decoration:none;cursor:pointer;transition:all .15s}
+  .btn-dl:hover{background:var(--accent);color:#000}
+  .sec-hd{font-family:'IBM Plex Mono',monospace;font-size:.62rem;text-transform:uppercase;letter-spacing:.14em;color:var(--muted);padding-bottom:8px;border-bottom:1px solid var(--border2);margin-bottom:10px;display:flex;justify-content:space-between}
+  .ptable{max-height:440px;overflow-y:auto;display:flex;flex-direction:column;gap:3px;padding-right:4px}
+  .ptable::-webkit-scrollbar{width:3px}.ptable::-webkit-scrollbar-track{background:var(--border)}.ptable::-webkit-scrollbar-thumb{background:var(--accent);border-radius:2px}
+  .prow{display:grid;grid-template-columns:58px 58px 62px 1fr 52px;gap:8px;align-items:center;padding:9px 12px;border-radius:3px;border:1px solid transparent;font-family:'IBM Plex Mono',monospace;font-size:.67rem}
+  .prow.keep{background:rgba(0,230,118,.04);border-color:rgba(0,230,118,.1)}
+  .prow.remove{background:rgba(255,61,61,.03);border-color:rgba(255,61,61,.08);opacity:.6}
+  .pbadge{padding:2px 6px;border-radius:2px;font-size:.57rem;font-weight:700;letter-spacing:.05em;text-align:center}
+  .bk{background:var(--green);color:#000}.br{background:var(--red);color:#fff}
+  .ppg{color:var(--muted2)}.psl{color:var(--accent);opacity:.85}.prz{color:var(--muted2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.62rem}.pln{color:var(--muted);text-align:right;font-size:.6rem}
+  .btn-rst{display:block;width:100%;margin-top:20px;padding:14px;background:none;border:1px solid var(--border2);color:var(--muted2);border-radius:3px;font-family:'IBM Plex Mono',monospace;font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;transition:all .15s}
+  .btn-rst:hover{border-color:var(--accent);color:var(--accent)}
+  footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-size:.6rem;color:var(--muted);text-align:center;letter-spacing:.08em}
+  @media(max-width:640px){.how{grid-template-columns:1fr}.stats{grid-template-columns:1fr 1fr}.prow{grid-template-columns:50px 50px 1fr}.prow .psl,.prow .pln{display:none}}
+</style>
+</head>
+<body>
+
+<div id="boot">
+  <div class="boot-spin"></div>
+  <div class="boot-logo">PDF <em>STRIPPER</em></div>
+  <div class="boot-msg">Loading Python engine...</div>
+  <div class="boot-sub">One-time load · usually 3–8 seconds</div>
+</div>
+
+<div class="wrap">
+  <header>
+    <div class="logo">PDF<br><em>STRIPPER</em></div>
+    <div class="hdr-r">
+      <b>Slide Build Detector</b>
+      Removes incremental animation pages<br>
+      from Beamer / LaTeX PDFs<br><br>
+      100% client-side · Python in browser<br>
+      No data ever leaves your device
+    </div>
+  </header>
+
+  <div class="how">
+    <div class="how-c"><div class="how-n">01</div><div class="how-t">The Problem</div><div class="how-d">Beamer/LaTeX decks export each slide multiple times — one page per bullet reveal. A 45-slide deck can become 158+ bloated pages.</div></div>
+    <div class="how-c"><div class="how-n">02</div><div class="how-t">Detection</div><div class="how-d">Groups pages by the slide number in the footer (e.g. "6 / 45"). All pages sharing a slide number are incremental builds of that one slide.</div></div>
+    <div class="how-c"><div class="how-n">03</div><div class="how-t">The Result</div><div class="how-d">Keeps only the LAST page per group — the fully-revealed version with all bullet points. Every earlier partial build is cleanly stripped out.</div></div>
+  </div>
+
+  <div id="dz">
+    <span class="dz-icon">📄</span>
+    <div class="dz-t">Drop Your PDF Here</div>
+    <div class="dz-s">or click to browse &nbsp;·&nbsp; Beamer / LaTeX presentations</div>
+    <input type="file" id="fi" accept=".pdf">
+  </div>
+
+  <div class="chip" id="chip">
+    <span class="c-ico">📋</span>
+    <div class="c-body">
+      <div class="c-name" id="cName">—</div>
+      <div class="c-meta" id="cMeta">—</div>
+    </div>
+    <button class="c-x" id="btnX">✕ Clear</button>
+  </div>
+
+  <div class="err" id="errBox"></div>
+  <button id="btnS">⚡ Strip Redundant Pages</button>
+
+  <div id="ld">
+    <div class="lhd"><span id="ltxt">Processing...</span><span id="lpct">0%</span></div>
+    <div class="ltrack"><div class="lfill" id="lbar"></div></div>
+    <div class="lsteps">
+      <div class="lstep" id="st1"><span class="ldot"></span>Reading PDF structure</div>
+      <div class="lstep" id="st2"><span class="ldot"></span>Extracting text from all pages</div>
+      <div class="lstep" id="st3"><span class="ldot"></span>Detecting slide numbers in footers</div>
+      <div class="lstep" id="st4"><span class="ldot"></span>Grouping incremental build pages</div>
+      <div class="lstep" id="st5"><span class="ldot"></span>Building stripped output PDF</div>
+    </div>
+  </div>
+
+  <div id="res">
+    <div class="stats">
+      <div class="sc"><div class="sn y" id="rO">—</div><div class="sl">Original Pages</div></div>
+      <div class="sc"><div class="sn g" id="rK">—</div><div class="sl">Pages Kept</div></div>
+      <div class="sc"><div class="sn r" id="rD">—</div><div class="sl">Pages Stripped</div></div>
+      <div class="sc"><div class="sn b" id="rG">—</div><div class="sl">Unique Slides</div></div>
+    </div>
+    <div class="rb-wrap">
+      <div class="rb-hd"><span>Page Reduction</span><strong id="rPct">—</strong></div>
+      <div class="rb-track"><div class="rb-fill" id="rbFill" style="width:100%"></div></div>
+    </div>
+    <a class="btn-dl" id="btnDl" href="#">⬇ Download Stripped PDF</a>
+    <div class="sec-hd"><span>Page-by-Page Analysis</span><span id="secInfo">—</span></div>
+    <div class="ptable" id="ptable"></div>
+    <button class="btn-rst" id="btnRst">↩ Strip Another PDF</button>
+  </div>
+
+  <footer>PDF STRIPPER · pypdf engine · All processing in your browser · Zero data retention</footer>
+</div>
+
+<script type="py" config='{"packages": ["pypdf"]}'>
+import re, io, base64
+from collections import defaultdict
+from js import document, console, setTimeout
+from pyodide.ffi import create_proxy
+from pypdf import PdfReader, PdfWriter
+
+# Hide boot screen
+document.getElementById("boot").classList.add("gone")
+
+# ── State ──
+_fb = None   # file bytes
+_fn = None   # filename
+_rb = None   # result bytes
+
+# ── Core algorithm ──
+def get_slide(text):
+    for line in reversed([l.strip() for l in (text or "").split("\n") if l.strip()]):
+        m = re.search(r'\b(\d+)\s*/\s*(\d+)\s*$', line)
+        if m:
+            c, t = int(m.group(1)), int(m.group(2))
+            if 1 <= c <= t:
+                return c, t
+    return None, None
+
+def do_strip(fb):
+    reader = PdfReader(io.BytesIO(fb))
+    total  = len(reader.pages)
+    groups = defaultdict(list)
+    nosld  = []
+    meta   = []
+
+    for i, pg in enumerate(reader.pages):
+        txt   = pg.extract_text() or ""
+        lines = [l.strip() for l in txt.split("\n") if l.strip()]
+        sn, tot = get_slide(txt)
+        meta.append({"i": i, "lc": len(lines), "sn": sn, "tot": tot})
+        (groups[sn] if sn is not None else nosld).append(i)
+
+    keep = set()
+    rsn  = {}
+    for sn, idxs in groups.items():
+        keep.add(idxs[-1])
+        kept_pg = idxs[-1] + 1
+        tot_str = meta[idxs[-1]]["tot"]
+        for idx in idxs[:-1]:
+            rsn[idx] = f"Incremental build of slide {sn}/{tot_str} — kept pg {kept_pg}"
+    for i in nosld:
+        keep.add(i)
+
+    kl = sorted(keep)
+    w  = PdfWriter()
+    for idx in kl:
+        w.add_page(reader.pages[idx])
+    out = io.BytesIO()
+    w.write(out); out.seek(0)
+
+    analysis = []
+    for p in meta:
+        rm = p["i"] not in keep
+        sl = f"{p['sn']}/{p['tot']}" if p["sn"] else "—"
+        analysis.append({
+            "pg": p["i"]+1, "sl": sl, "lc": p["lc"],
+            "status": "remove" if rm else "keep",
+            "reason": rsn.get(p["i"], "Unique content"),
+        })
+    return {"bytes": out.read(), "orig": total, "kept": len(kl),
+            "dropped": total-len(kl), "groups": len(groups), "analysis": analysis}
+
+# ── UI helpers ──
+def prog(pct, label):
+    document.getElementById("lbar").style.width = f"{pct}%"
+    document.getElementById("lpct").textContent  = f"{int(pct)}%"
+    document.getElementById("ltxt").textContent  = label
+
+def step(n):
+    for i in range(1,6):
+        el = document.getElementById(f"st{i}")
+        el.classList.remove("active","done")
+        if   i < n: el.classList.add("done")
+        elif i==n:  el.classList.add("active")
+
+def alldone():
+    for i in range(1,6):
+        el = document.getElementById(f"st{i}")
+        el.classList.remove("active"); el.classList.add("done")
+
+def showerr(msg):
+    b = document.getElementById("errBox")
+    b.textContent = f"⚠ {msg}"; b.classList.add("on")
+
+def hideerr():
+    document.getElementById("errBox").classList.remove("on")
+
+def reset_steps():
+    for i in range(1,6):
+        el = document.getElementById(f"st{i}")
+        el.classList.remove("active","done")
+
+def full_reset():
+    global _fb, _fn, _rb
+    _fb = _fn = _rb = None
+    document.getElementById("fi").value = ""
+    for eid in ["chip","btnS","ld","res"]:
+        document.getElementById(eid).classList.remove("on")
+    hideerr(); reset_steps()
+
+# ── File load ──
+def load_file(f):
+    global _fb, _fn
+    r = __import__("js").FileReader.new()
+    from js import Uint8Array
+    def onload(e):
+        global _fb, _fn
+        _fb = bytes(Uint8Array.new(r.result).to_py())
+        _fn = f.name
+        document.getElementById("cName").textContent = f.name
+        document.getElementById("cMeta").textContent = f"{f.size/1024:.1f} KB · PDF"
+        document.getElementById("chip").classList.add("on")
+        document.getElementById("btnS").classList.add("on")
+        document.getElementById("res").classList.remove("on")
+        hideerr()
+    r.onload = create_proxy(onload)
+    r.readAsArrayBuffer(f)
+
+def on_change(e):
+    fs = document.getElementById("fi").files
+    if fs.length > 0: load_file(fs.item(0))
+
+document.getElementById("fi").addEventListener("change", create_proxy(on_change))
+
+def on_over(e):
+    e.preventDefault(); document.getElementById("dz").classList.add("over")
+def on_leave(e):
+    document.getElementById("dz").classList.remove("over")
+def on_drop(e):
+    e.preventDefault(); document.getElementById("dz").classList.remove("over")
+    fs = e.dataTransfer.files
+    if fs.length > 0:
+        f = fs.item(0)
+        if f.name.lower().endswith(".pdf"): load_file(f)
+
+document.getElementById("dz").addEventListener("dragover",  create_proxy(on_over))
+document.getElementById("dz").addEventListener("dragleave", create_proxy(on_leave))
+document.getElementById("dz").addEventListener("drop",      create_proxy(on_drop))
+document.getElementById("dz").addEventListener("click",     create_proxy(lambda e: document.getElementById("fi").click()))
+document.getElementById("btnX").addEventListener("click",   create_proxy(lambda e: full_reset()))
+document.getElementById("btnRst").addEventListener("click", create_proxy(lambda e: full_reset()))
+
+# ── Strip ──
+def on_strip(e):
+    global _rb
+    if not _fb: return
+    hideerr()
+    btn = document.getElementById("btnS")
+    btn.disabled = True
+    document.getElementById("ld").classList.add("on")
+    document.getElementById("res").classList.remove("on")
+    reset_steps()
+    try:
+        step(1); prog(10, "Reading PDF structure...")
+        step(2); prog(28, "Extracting text from pages...")
+        step(3); prog(52, "Detecting slide numbers in footers...")
+        step(4); prog(72, "Grouping incremental build pages...")
+        step(5); prog(88, "Building stripped PDF...")
+        r = do_strip(_fb)
+        _rb = r["bytes"]
+        prog(100, "Complete!"); alldone()
+        render(r)
+    except Exception as ex:
+        document.getElementById("ld").classList.remove("on")
+        showerr(str(ex)); console.error(str(ex))
+    btn.disabled = False
+
+def render(r):
+    o, k, d, g = r["orig"], r["kept"], r["dropped"], r["groups"]
+    pct = round(k/o*100) if o else 100
+    red = 100 - pct
+    document.getElementById("rO").textContent   = str(o)
+    document.getElementById("rK").textContent   = str(k)
+    document.getElementById("rD").textContent   = str(d)
+    document.getElementById("rG").textContent   = str(g)
+    document.getElementById("rPct").textContent = f"{red}% smaller"
+    document.getElementById("secInfo").textContent = f"{k} kept · {d} stripped"
+
+    bar = document.getElementById("rbFill")
+    bar.style.width = "100%"
+    def anim(_): bar.style.width = f"{pct}%"
+    setTimeout(create_proxy(anim), 80)
+
+    b64 = base64.b64encode(_rb).decode()
+    dl  = document.getElementById("btnDl")
+    dl.href     = f"data:application/pdf;base64,{b64}"
+    dl.download = (_fn or "output").replace(".pdf","") + "_stripped.pdf"
+
+    tbl = document.getElementById("ptable")
+    tbl.innerHTML = ""
+    for p in r["analysis"]:
+        row = document.createElement("div")
+        row.className = f"prow {p['status']}"
+        bc = "bk" if p["status"]=="keep" else "br"
+        bt = "KEEP" if p["status"]=="keep" else "STRIP"
+        row.innerHTML = (
+            f'<span class="pbadge {bc}">{bt}</span>'
+            f'<span class="ppg">PG {p["pg"]}</span>'
+            f'<span class="psl">{p["sl"]}</span>'
+            f'<span class="prz">{p["reason"]}</span>'
+            f'<span class="pln">{p["lc"]} ln</span>'
+        )
+        tbl.appendChild(row)
+
+    document.getElementById("ld").classList.remove("on")
+    document.getElementById("res").classList.add("on")
+    document.getElementById("res").scrollIntoView({"behavior":"smooth","block":"start"})
+
+document.getElementById("btnS").addEventListener("click", create_proxy(on_strip))
+console.log("PDF Stripper ready ✓  (pypdf only)")
+</script>
+</body>
+</html>
